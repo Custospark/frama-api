@@ -1,17 +1,25 @@
 # .htaccess for the Frama SPA - used at the root of the deployed build folder
-# (frama.custospark.com subdomain document root).
+# (frama.custospark.com).
 #
 # Rules:
 #   - Real files/dirs are served as-is with correct MIME types.
 #   - Non-file routes fall back to index.html (SPA routing).
 #   - Hashed build assets (js/css/images/fonts) are cached as immutable.
 #   - index.html is never HTTP-cached so browsers always pick up new hashes.
+#
+# Proven copy of the Academy/Custograde production .htaccess (same account),
+# with only the main-domain bounce target swapped to frama.custospark.com.
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
   # Handle client-side routing
   RewriteBase /
+
+  # Main domain must never serve this folder (absolute /assets only resolve
+  # on the subdomain) - bounce main-domain hits to the subdomain.
+  RewriteCond %{HTTP_HOST} ^(www\.)?custospark\.com$ [NC]
+  RewriteRule ^(.*)$ https://frama.custospark.com/$1 [R=301,L]
 
   # Don't rewrite files or directories that exist
   RewriteCond %{REQUEST_FILENAME} -f [OR]
@@ -58,6 +66,12 @@
   Header set X-Frame-Options "SAMEORIGIN"
   Header set X-XSS-Protection "1; mode=block"
 
+  # Add CORS headers for assets (helps with fonts and cross-origin requests)
+  <FilesMatch "\.(jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
   # Hashed JS/CSS are immutable (new builds get new hashes), so cache them hard.
   <FilesMatch "\.(js|mjs|css)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
@@ -77,10 +91,15 @@
   Deny from all
 </FilesMatch>
 
-<FilesMatch "\.(htaccess|htpasswd|ini|log|sh|sql|lock)$">
+<FilesMatch "\.(htaccess|htpasswd|ini|log|sh|sql|json|lock)$">
   Order allow,deny
   Deny from all
 </FilesMatch>
 
 # Set default charset
 AddDefaultCharset UTF-8
+
+# Enable Keep-Alive
+<IfModule mod_headers.c>
+  Header set Connection keep-alive
+</IfModule>
