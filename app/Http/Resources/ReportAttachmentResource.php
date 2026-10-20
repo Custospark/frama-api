@@ -12,6 +12,7 @@ class ReportAttachmentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'group' => $this->group ?? 'receipt',
             'original_name' => $this->original_name,
             'url' => Storage::disk('public')->url($this->path),
             'download_url' => route('reports.attachments.download', ['report' => $this->report_id, 'attachment' => $this->id]),

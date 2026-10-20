@@ -12,6 +12,7 @@ class ReportAttachment extends Model
 
     protected $fillable = [
         'report_id',
+        'group',
         'original_name',
         'path',
         'mime_type',

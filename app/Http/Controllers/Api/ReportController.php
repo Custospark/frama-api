@@ -49,7 +49,8 @@ class ReportController extends BaseApiController
             $report = $this->reportService->submit(
                 $request->user(),
                 $request->validated(),
-                $request->file('attachments') ?? [],
+                $request->file('receipt_photos') ?? [],
+                $request->file('expense_receipts') ?? [],
             );
         } catch (RuntimeException $e) {
             return ApiResponse::error($e->getMessage(), 409);
@@ -149,7 +150,7 @@ class ReportController extends BaseApiController
         return response()->streamDownload(function () use ($reports, $customColumns) {
             $out = fopen('php://output', 'w');
             fputcsv($out, array_merge(
-                ['Date', 'Branch', 'Rooms', 'Bar', 'Food', 'Sauna', 'Total', 'Expenses', 'Cash Handed Over', 'Comment', 'Manager', 'Status'],
+                ['Date', 'Branch', 'Rooms', 'Bar', 'Food', 'Sauna', 'Other', 'Beds Occupied', 'Total', 'Expenses', 'Cash Handed Over', 'Comment', 'Manager', 'Status'],
                 array_map(fn ($col) => $col['label'], $customColumns),
             ));
 
@@ -164,6 +165,8 @@ class ReportController extends BaseApiController
                     $report->bar_rev,
                     $report->food_rev,
                     $report->sauna_rev,
+                    $report->other_rev,
+                    $report->beds_occupied,
                     $report->total_rev,
                     $report->expenses,
                     $report->cash_handed_over,

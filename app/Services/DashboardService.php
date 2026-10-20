@@ -14,7 +14,7 @@ class DashboardService implements DashboardServiceInterface
     {
         $date = $date ? Carbon::parse($date)->toDateString() : now()->toDateString();
 
-        $branches = Branch::where('is_active', true)->orderBy('branch_name')->get();
+        $branches = Branch::with('businessType')->where('is_active', true)->orderBy('branch_name')->get();
 
         $reports = Report::with(['user', 'attachments'])
             ->whereDate('report_date', $date)
@@ -53,10 +53,13 @@ class DashboardService implements DashboardServiceInterface
                 'branch_name' => $branch->branch_name,
                 'branch_code' => $branch->code,
                 'date' => $date,
+                'business_type' => $branch->businessType?->slug,
                 'rooms_rev' => $report ? (float) $report->rooms_rev : 0.0,
                 'bar_rev' => $report ? (float) $report->bar_rev : 0.0,
                 'food_rev' => $report ? (float) $report->food_rev : 0.0,
                 'sauna_rev' => $report ? (float) $report->sauna_rev : 0.0,
+                'other_rev' => $report ? (float) $report->other_rev : 0.0,
+                'beds_occupied' => $report?->beds_occupied,
                 'total_rev' => $report ? (float) $report->total_rev : 0.0,
                 'expenses' => $report ? (float) $report->expenses : 0.0,
                 'net_rev' => $report ? (float) ($report->total_rev - $report->expenses) : 0.0,
@@ -64,6 +67,11 @@ class DashboardService implements DashboardServiceInterface
                 'comment' => $report?->comment,
                 'manager_name' => $report?->manager_name ?? $branch->manager_name,
                 'attachments_count' => $report ? $report->attachments->count() : 0,
+                'receipt_count' => $report ? $report->attachments->where('group', 'receipt')->count() : 0,
+                'expense_receipt_count' => $report ? $report->attachments->where('group', 'expense')->count() : 0,
+                'has_receipt_photo' => $report
+                    ? $report->attachments->where('group', 'receipt')->isNotEmpty()
+                    : false,
                 'first_attachment_url' => $report && $report->attachments->isNotEmpty()
                     ? \Illuminate\Support\Facades\Storage::disk('public')->url($report->attachments->first()->path)
                     : null,

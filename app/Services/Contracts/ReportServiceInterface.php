@@ -15,7 +15,7 @@ interface ReportServiceInterface
 
     public function getById(User $user, int $id): ?Report;
 
-    public function submit(User $user, array $data, array $attachments): Report;
+    public function submit(User $user, array $data, array $receiptFiles, array $expenseFiles): Report;
 
     public function isLockedForDate(string $date): bool;
 }

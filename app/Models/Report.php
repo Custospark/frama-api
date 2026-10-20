@@ -20,6 +20,8 @@ class Report extends Model
         'bar_rev',
         'food_rev',
         'sauna_rev',
+        'other_rev',
+        'beds_occupied',
         'total_rev',
         'expenses',
         'cash_handed_over',
@@ -39,6 +41,8 @@ class Report extends Model
             'bar_rev' => 'decimal:2',
             'food_rev' => 'decimal:2',
             'sauna_rev' => 'decimal:2',
+            'other_rev' => 'decimal:2',
+            'beds_occupied' => 'integer',
             'total_rev' => 'decimal:2',
             'expenses' => 'decimal:2',
             'cash_handed_over' => 'decimal:2',
@@ -63,13 +67,14 @@ class Report extends Model
         return $this->hasMany(ReportAttachment::class);
     }
 
-    /** Total is always derivable from the parts. */
+    /** Total is always derivable from the parts (hostel passes total directly). */
     public static function computeTotal(array $parts): float
     {
-        return (float) $parts['rooms_rev']
-            + (float) $parts['bar_rev']
-            + (float) $parts['food_rev']
-            + (float) $parts['sauna_rev'];
+        return (float) ($parts['rooms_rev'] ?? 0)
+            + (float) ($parts['bar_rev'] ?? 0)
+            + (float) ($parts['food_rev'] ?? 0)
+            + (float) ($parts['sauna_rev'] ?? 0)
+            + (float) ($parts['other_rev'] ?? 0);
     }
 
     public function scopeForBranch(Builder $query, int $branchId): Builder

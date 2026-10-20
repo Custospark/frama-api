@@ -44,11 +44,20 @@ class FormulaEvaluator
      */
     public function referencedVariables(string $expression): array
     {
+        $tokens = $this->tokenize($expression);
+
         $vars = [];
-        foreach ($this->tokenize($expression) as $token) {
-            if ($token['type'] === 'var') {
-                $vars[$token['value']] = true;
+        $count = count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            if ($tokens[$i]['type'] !== 'var') {
+                continue;
             }
+            // A var token followed by '(' is a function call, not a variable.
+            $nextType = $tokens[$i + 1]['type'] ?? null;
+            if ($nextType === '(') {
+                continue;
+            }
+            $vars[$tokens[$i]['value']] = true;
         }
 
         // Also ensure the expression actually parses.
@@ -304,13 +313,14 @@ class FormulaEvaluator
         // expressions like if(x>0, y/x, 0) are safe against division by zero.
         if (strtolower($name) === 'if') {
             $condition = $this->parseComparison($variables);
+            $this->next(); // consume ',' after condition
 
             if ($condition != 0.0) {
                 $value = $this->parseComparison($variables);
                 $this->skipRemainingArgs();
             } else {
                 $this->skipOneArgument();
-                $this->next(); // consume ','
+                $this->next(); // consume ',' between true and false branch
                 $value = $this->parseComparison($variables);
                 $this->skipRemainingArgs();
             }

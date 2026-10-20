@@ -17,7 +17,7 @@ class CustomFieldService implements CustomFieldServiceInterface
 {
     /** Fixed report revenue keys that calculated fields may reference. */
     private const BASE_REPORT_VARS = [
-        'rooms_rev', 'bar_rev', 'food_rev', 'sauna_rev', 'total_rev',
+        'rooms_rev', 'bar_rev', 'food_rev', 'sauna_rev', 'other_rev', 'total_rev',
         'expenses', 'cash_handed_over',
     ];
 
@@ -99,7 +99,12 @@ class CustomFieldService implements CustomFieldServiceInterface
         }
 
         $newType = CustomFieldType::from($payload['type'] ?? $field->type->value);
-        if ($newType === CustomFieldType::Calculated) {
+        $becameCalculated = $newType === CustomFieldType::Calculated
+            && $field->type !== CustomFieldType::Calculated;
+        $validatingFormula = $becameCalculated
+            || (array_key_exists('validation', $data) && $newType === CustomFieldType::Calculated);
+
+        if ($validatingFormula) {
             $this->assertValidFormula(
                 $field->scope,
                 $field->business_type_id,
@@ -156,7 +161,7 @@ class CustomFieldService implements CustomFieldServiceInterface
             return true;
         }
 
-        return $field->branch_id !== null && $field->branch_id === $user->branch_id;
+        return $field->branch_id === null || $field->branch_id === $user->branch_id;
     }
 
     /**
@@ -177,7 +182,13 @@ class CustomFieldService implements CustomFieldServiceInterface
         try {
             $references = $this->formulaEvaluator->referencedVariables($formula);
         } catch (InvalidArgumentException $e) {
-            throw new RuntimeException('The formula is invalid: ' . $e->getMessage());
+            $message = $e->getMessage();
+
+            if (str_contains($message, 'Division by zero') || str_contains($message, 'Modulo by zero')) {
+                throw new RuntimeException('The formula must be safe when values are zero. Guard divisions with if(denominator>0, numerator/denominator, 0).');
+            }
+
+            throw new RuntimeException('The formula is invalid: ' . $message);
         }
 
         $known = $this->customFieldRepository->allForBranch($branchId, $scope, $businessTypeId);

@@ -4,6 +4,9 @@
 .env.backup
 .env.production
 .env.server
+CREDENTIALS.md
+CREDENTIALS*.md
+CREDENTIALS*.pdf
 .phpactor.json
 .phpunit.result.cache
 /.fleet

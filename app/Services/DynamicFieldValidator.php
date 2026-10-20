@@ -232,13 +232,18 @@ class DynamicFieldValidator
                 throw new InvalidArgumentException("The calculated field '{$key}' has no formula.");
             }
 
-            foreach ($this->formula->referencedVariables($formula) as $ref) {
-                if (isset($calculated[$ref])) {
-                    $resolve($ref);
+            try {
+                foreach ($this->formula->referencedVariables($formula) as $ref) {
+                    if (isset($calculated[$ref])) {
+                        $resolve($ref);
+                    }
                 }
+
+                $context[$key] = $this->formula->evaluate($formula, $context);
+            } catch (InvalidArgumentException $e) {
+                throw new InvalidArgumentException("Cannot calculate '{$key}': " . $e->getMessage());
             }
 
-            $context[$key] = $this->formula->evaluate($formula, $context);
             $resolved[$key] = true;
             unset($visiting[$key]);
         };

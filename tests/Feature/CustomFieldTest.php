@@ -106,7 +106,9 @@ class CustomFieldTest extends TestCase
             'sauna_rev' => 0,
             'expenses' => 0,
             'cash_handed_over' => 100000,
-            'attachments' => [UploadedFile::fake()->image('receipt.jpg')],
+            'other_rev' => 0,
+            'receipt_photos' => [UploadedFile::fake()->image('receipt.jpg')],
+            'expense_receipts' => [UploadedFile::fake()->image('expense.jpg')],
             'custom_values' => ['beds_occupied' => 12],
         ])->assertStatus(201)
             ->assertJsonPath('data.custom_values.beds_occupied', 12);
@@ -134,7 +136,9 @@ class CustomFieldTest extends TestCase
             'bar_rev' => 0,
             'food_rev' => 0,
             'sauna_rev' => 0,
-            'attachments' => [UploadedFile::fake()->image('receipt.jpg')],
+            'other_rev' => 0,
+            'receipt_photos' => [UploadedFile::fake()->image('receipt.jpg')],
+            'expense_receipts' => [UploadedFile::fake()->image('expense.jpg')],
         ])->assertStatus(422)->assertJsonValidationErrors('custom_values.beds_occupied');
     }
 
@@ -160,7 +164,9 @@ class CustomFieldTest extends TestCase
             'bar_rev' => 0,
             'food_rev' => 0,
             'sauna_rev' => 0,
-            'attachments' => [UploadedFile::fake()->image('receipt.jpg')],
+            'other_rev' => 0,
+            'receipt_photos' => [UploadedFile::fake()->image('receipt.jpg')],
+            'expense_receipts' => [UploadedFile::fake()->image('expense.jpg')],
             'custom_values' => ['condition' => 'excellent'],
         ])->assertStatus(422)->assertJsonValidationErrors('custom_values.condition');
     }
@@ -239,5 +245,79 @@ class CustomFieldTest extends TestCase
             'type' => 'number',
         ])->assertStatus(201)
             ->assertJsonPath('data.branch_id', null);
+    }
+
+    public function test_manager_can_delete_org_wide_field(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $field = CustomField::factory()->create([
+            'scope' => 'report',
+            'label' => 'Seeded Field',
+            'key' => 'seeded_field',
+            'type' => 'number',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($manager)
+            ->deleteJson("/api/v1/custom-fields/{$field->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('custom_fields', ['id' => $field->id]);
+    }
+
+    public function test_manager_can_update_org_wide_field(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $field = CustomField::factory()->create([
+            'scope' => 'report',
+            'label' => 'Seeded Field',
+            'key' => 'seeded_field',
+            'type' => 'number',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($manager)
+            ->putJson("/api/v1/custom-fields/{$field->id}", [
+                'label' => 'Seeded Field Renamed',
+                'is_required' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.label', 'Seeded Field Renamed')
+            ->assertJsonPath('data.is_required', true);
+    }
+
+    public function test_calculated_field_rejects_unguarded_division(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $type = BusinessType::factory()->create(['name' => 'Room', 'slug' => 'room']);
+
+        $response = $this->actingAs($manager)->postJson('/api/v1/custom-fields', [
+            'scope' => 'report',
+            'business_type_id' => $type->id,
+            'label' => 'Cost Ratio',
+            'type' => 'calculated',
+            'validation' => ['formula' => 'expenses / total_rev', 'precision' => 1],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('safe when values are zero', $response->json('message'));
+    }
+
+    public function test_calculated_field_accepts_guarded_division(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $type = BusinessType::factory()->create(['name' => 'Room', 'slug' => 'room']);
+
+        $this->actingAs($manager)->postJson('/api/v1/custom-fields', [
+            'scope' => 'report',
+            'business_type_id' => $type->id,
+            'label' => 'Cost Ratio',
+            'type' => 'calculated',
+            'validation' => ['formula' => 'if(total_rev > 0, expenses / total_rev * 100, 0)', 'precision' => 1],
+        ])->assertStatus(201);
     }
 }

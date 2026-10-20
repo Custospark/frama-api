@@ -12,6 +12,8 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use RuntimeException;
 
 class ReportService implements ReportServiceInterface
@@ -47,7 +49,7 @@ class ReportService implements ReportServiceInterface
         return $report;
     }
 
-    public function submit(User $user, array $data, array $attachments): Report
+    public function submit(User $user, array $data, array $receiptFiles, array $expenseFiles): Report
     {
         if (! $user->branch_id) {
             throw new RuntimeException('Your account is not linked to a branch.');
@@ -63,13 +65,50 @@ class ReportService implements ReportServiceInterface
             throw new RuntimeException('A report has already been submitted for this date.');
         }
 
-        if (empty($attachments)) {
-            throw new RuntimeException('At least one attachment is required.');
+        if (empty($receiptFiles)) {
+            throw new RuntimeException('At least one receipt photo is required.');
         }
 
-        $total = Report::computeTotal($data);
+        if (empty($expenseFiles)) {
+            throw new RuntimeException('At least one expense receipt is required.');
+        }
 
-        $customValues = $this->extractCustomValues($user->branch_id, $data);
+        $isHostel = $user->branch?->businessType?->slug === 'hostel';
+
+        if ($isHostel) {
+            // Hostels report one collected total + occupancy; categories stay blank.
+            $total = (float) ($data['total_rev'] ?? 0);
+            $rooms = 0.0;
+            $bar = 0.0;
+            $food = 0.0;
+            $sauna = 0.0;
+            $other = 0.0;
+            $bedsOccupied = (int) ($data['beds_occupied'] ?? 0);
+        } else {
+            $rooms = (float) ($data['rooms_rev'] ?? 0);
+            $bar = (float) ($data['bar_rev'] ?? 0);
+            $food = (float) ($data['food_rev'] ?? 0);
+            $sauna = (float) ($data['sauna_rev'] ?? 0);
+            $other = (float) ($data['other_rev'] ?? 0);
+            $total = Report::computeTotal([
+                'rooms_rev' => $rooms,
+                'bar_rev' => $bar,
+                'food_rev' => $food,
+                'sauna_rev' => $sauna,
+                'other_rev' => $other,
+            ]);
+            $bedsOccupied = null;
+        }
+
+        $customValues = $this->extractCustomValues($user->branch_id, [
+            ...$data,
+            'rooms_rev' => $rooms,
+            'bar_rev' => $bar,
+            'food_rev' => $food,
+            'sauna_rev' => $sauna,
+            'other_rev' => $other,
+            'total_rev' => $total,
+        ]);
 
         $businessTypeIds = collect($data['business_type_ids'] ?? [])
             ->map(fn ($id) => (int) $id)
@@ -81,10 +120,12 @@ class ReportService implements ReportServiceInterface
             'branch_id' => $user->branch_id,
             'user_id' => $user->id,
             'report_date' => $date,
-            'rooms_rev' => $data['rooms_rev'],
-            'bar_rev' => $data['bar_rev'],
-            'food_rev' => $data['food_rev'],
-            'sauna_rev' => $data['sauna_rev'],
+            'rooms_rev' => $rooms,
+            'bar_rev' => $bar,
+            'food_rev' => $food,
+            'sauna_rev' => $sauna,
+            'other_rev' => $other,
+            'beds_occupied' => $bedsOccupied,
             'total_rev' => $total,
             'expenses' => $data['expenses'] ?? 0,
             'cash_handed_over' => $data['cash_handed_over'] ?? 0,
@@ -95,7 +136,8 @@ class ReportService implements ReportServiceInterface
             'custom_values' => $customValues ?: null,
         ]);
 
-        $this->storeAttachments($report, $attachments);
+        $this->storeAttachments($report, $receiptFiles, 'receipt');
+        $this->storeAttachments($report, $expenseFiles, 'expense');
 
         $this->whatsAppNotifier->notifyReportSubmitted($report->load('branch'));
 
@@ -103,14 +145,15 @@ class ReportService implements ReportServiceInterface
     }
 
     /**
-     * Persist every uploaded file as a report attachment. Zip archives are
-     * flagged so the UI can present them distinctly.
+     * Persist every uploaded file as a report attachment in the given group
+     * ('receipt' or 'expense'). Zip archives are flagged so the UI can present
+     * them distinctly.
      *
-     * @param  array<int, UploadedFile>  $attachments
+     * @param  array<int, UploadedFile>  $files
      */
-    protected function storeAttachments(Report $report, array $attachments): void
+    protected function storeAttachments(Report $report, array $files, string $group = 'receipt'): void
     {
-        foreach ($attachments as $file) {
+        foreach ($files as $file) {
             if (! $file instanceof UploadedFile) {
                 continue;
             }
@@ -119,6 +162,7 @@ class ReportService implements ReportServiceInterface
             $original = $file->getClientOriginalName();
 
             $report->attachments()->create([
+                'group' => $group,
                 'original_name' => $original,
                 'path' => $path,
                 'mime_type' => $file->getClientMimeType(),
@@ -170,16 +214,27 @@ class ReportService implements ReportServiceInterface
             'bar_rev' => (float) ($data['bar_rev'] ?? 0),
             'food_rev' => (float) ($data['food_rev'] ?? 0),
             'sauna_rev' => (float) ($data['sauna_rev'] ?? 0),
+            'other_rev' => (float) ($data['other_rev'] ?? 0),
             'expenses' => (float) ($data['expenses'] ?? 0),
             'cash_handed_over' => (float) ($data['cash_handed_over'] ?? 0),
-            'total_rev' => (float) Report::computeTotal($data),
+            'total_rev' => (float) ($data['total_rev'] ?? 0),
         ];
 
-        return $this->dynamicFieldValidator->extractValues(
-            $definitions,
-            $data['custom_values'] ?? [],
-            'reports/custom',
-            $baseVariables,
-        );
+        try {
+            return $this->dynamicFieldValidator->extractValues(
+                $definitions,
+                $data['custom_values'] ?? [],
+                'reports/custom',
+                $baseVariables,
+            );
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+
+            if (str_contains($message, 'Division by zero') || str_contains($message, 'Modulo by zero')) {
+                $message .= ' Guard the formula with if(denominator>0, numerator/denominator, 0).';
+            }
+
+            throw ValidationException::withMessages(['custom_values' => $message]);
+        }
     }
 }
