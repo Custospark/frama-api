@@ -28,14 +28,53 @@ class AuthTest extends TestCase
             ->assertJsonStructure(['token']);
     }
 
-    public function test_executive_can_login_with_org_code(): void
+    public function test_executive_can_login_with_own_access_code(): void
     {
-        User::factory()->executive()->withPin('9001')->create();
+        $executive = User::factory()->executive()->withPin('9001')->create();
 
         $this->postJson('/api/v1/auth/login', [
-            'access_code' => config('app.org_code'),
+            'access_code' => $executive->access_code,
             'pin' => '9001',
-        ])->assertOk()->assertJsonPath('user.role', 'executive');
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $executive->id)
+            ->assertJsonPath('user.role', 'executive');
+    }
+
+    public function test_admin_and_executive_have_distinct_login_identities(): void
+    {
+        $admin = User::factory()->platformAdmin()->withPin('1234')->create();
+        $executive = User::factory()->executive()->withPin('1234')->create();
+
+        $this->assertNotSame($admin->access_code, $executive->access_code);
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => $admin->access_code,
+            'pin' => '1234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $admin->id)
+            ->assertJsonPath('user.role', 'platform_admin');
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => $executive->access_code,
+            'pin' => '1234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $executive->id)
+            ->assertJsonPath('user.role', 'executive');
+    }
+
+    public function test_access_code_lookup_is_case_insensitive(): void
+    {
+        $executive = User::factory()->executive()->withPin('1234')->create();
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => strtolower((string) $executive->access_code),
+            'pin' => '1234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $executive->id);
     }
 
     public function test_login_fails_with_wrong_pin(): void

@@ -56,6 +56,83 @@ class UserManagementTest extends TestCase
             ->assertJsonValidationErrors('pin');
     }
 
+    public function test_executive_requires_a_unique_access_code(): void
+    {
+        $admin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/users', [
+                'name' => 'First Exec',
+                'role' => Role::Executive->value,
+                'access_code' => 'HOUSETWO',
+                'pin' => '7733',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.access_code', 'HOUSETWO');
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/users', [
+                'name' => 'Second Exec',
+                'role' => Role::Executive->value,
+                'access_code' => 'housetwo',
+                'pin' => '7733',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('access_code');
+    }
+
+    public function test_api_created_manager_can_login_with_branch_code(): void
+    {
+        $branch = Branch::factory()->create(['code' => 'NAKKAWA']);
+        $admin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/users', [
+                'name' => 'Branch Manager',
+                'role' => Role::Manager->value,
+                'branch_id' => $branch->id,
+                'pin' => '5566',
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.access_code', 'NAKKAWA');
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => 'NAKKAWA',
+            'pin' => '5566',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.role', 'manager')
+            ->assertJsonPath('user.branch.code', 'NAKKAWA');
+    }
+
+    public function test_changing_a_branch_code_updates_the_manager_login_code(): void
+    {
+        $branch = Branch::factory()->create(['code' => 'OLDNAME']);
+        $manager = User::factory()->manager($branch)->withPin('1234')->create();
+        $admin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($admin)
+            ->putJson("/api/v1/branches/{$branch->id}", [
+                'branch_name' => 'Oldname Renamed',
+                'code' => 'NEWNAME',
+            ])
+            ->assertOk();
+
+        $this->assertSame('NEWNAME', $manager->fresh()->access_code);
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => 'NEWNAME',
+            'pin' => '1234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $manager->id);
+
+        $this->postJson('/api/v1/auth/login', [
+            'access_code' => 'OLDNAME',
+            'pin' => '1234',
+        ])->assertStatus(401);
+    }
+
     public function test_platform_admin_can_reset_pin(): void
     {
         $admin = User::factory()->platformAdmin()->create();

@@ -24,6 +24,7 @@ class UserFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
+            'access_code' => strtoupper(fake()->unique()->regexify('[A-Z]{4}[0-9]{4}')),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => Role::Manager,
@@ -36,10 +37,16 @@ class UserFactory extends Factory
 
     public function manager(?Branch $branch = null): static
     {
-        return $this->state(fn () => [
+        $state = [
             'role' => Role::Manager,
             'branch_id' => $branch?->id ?? Branch::factory(),
-        ]);
+        ];
+
+        if ($branch !== null) {
+            $state['access_code'] = strtoupper($branch->code);
+        }
+
+        return $this->state(fn () => $state);
     }
 
     public function executive(): static

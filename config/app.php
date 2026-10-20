@@ -80,18 +80,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Organisation Access Code
-    |--------------------------------------------------------------------------
-    |
-    | Shared access code used by executives and platform admins to sign in with
-    | their PIN (managers use their branch code instead).
-    |
-    */
-
-    'org_code' => env('FRAMA_ORG_CODE', 'FRAMA'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

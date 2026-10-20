@@ -6,6 +6,6 @@ use App\Models\User;
 
 interface AuthRepositoryInterface
 {
-    /** Resolve the user for an access code (branch code or org code), or null. */
+    /** Resolve the user for their unique access code, or null. */
     public function findByAccessCode(string $accessCode): ?User;
 }

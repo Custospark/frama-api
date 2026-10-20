@@ -35,47 +35,58 @@ class DatabaseSeeder extends Seeder
             ['branch_name' => 'Kibuya', 'manager_name' => 'Kibuya Manager', 'business_type_id' => $businessTypes['hostel']->id, 'is_active' => true],
         );
 
-        User::firstOrCreate(
-            ['email' => 'admin@framainvestments.com'],
+        $seededUsers = [
             [
+                'email' => 'admin@framainvestments.com',
                 'name' => 'Platform Admin',
                 'role' => 'platform_admin',
-                'pin_hash' => Hash::make(env('FRAMA_ADMIN_PIN', '9001')),
-                'is_active' => true,
+                'branch_id' => null,
+                'access_code' => 'FRAMA',
+                'pin' => env('FRAMA_ADMIN_PIN', '1234'),
             ],
-        );
-
-        User::firstOrCreate(
-            ['email' => 'executive@framainvestments.com'],
             [
+                'email' => 'executive@framainvestments.com',
                 'name' => 'Executive',
                 'role' => 'executive',
-                'pin_hash' => Hash::make('1234'),
-                'is_active' => true,
+                'branch_id' => null,
+                'access_code' => 'EXEC',
+                'pin' => '1234',
             ],
-        );
-
-        User::firstOrCreate(
-            ['email' => 'rubaga@framainvestments.com'],
             [
+                'email' => 'rubaga@framainvestments.com',
                 'name' => 'Rubaga Manager',
                 'role' => 'manager',
                 'branch_id' => $rubaga->id,
-                'pin_hash' => Hash::make('1234'),
-                'is_active' => true,
+                'access_code' => $rubaga->code,
+                'pin' => '1234',
             ],
-        );
-
-        User::firstOrCreate(
-            ['email' => 'kibuya@framainvestments.com'],
             [
+                'email' => 'kibuya@framainvestments.com',
                 'name' => 'Kibuya Manager',
                 'role' => 'manager',
                 'branch_id' => $kibuya->id,
-                'pin_hash' => Hash::make('1234'),
-                'is_active' => true,
+                'access_code' => $kibuya->code,
+                'pin' => '1234',
             ],
-        );
+        ];
+
+        foreach ($seededUsers as $seeded) {
+            $user = User::firstOrCreate(
+                ['email' => $seeded['email']],
+                [
+                    'name' => $seeded['name'],
+                    'role' => $seeded['role'],
+                    'branch_id' => $seeded['branch_id'],
+                    'pin_hash' => Hash::make($seeded['pin']),
+                    'is_active' => true,
+                ],
+            );
+
+            $user->forceFill([
+                'access_code' => strtoupper((string) $seeded['access_code']),
+                'pin_hash' => Hash::make($seeded['pin']),
+            ])->save();
+        }
 
         $this->seedDefaultReportFields($businessTypes);
     }

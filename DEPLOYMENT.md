@@ -32,7 +32,7 @@ them.
 | First-deploy commits | backend `e9b8c59`..`3eba069`, frontend `591d1e3`..`0da8059` |
 | Backups (on server) | web placeholder: `~/domains/frama-backup-20261020-144402` · old `.htaccess`: `~/domains/frama-htaccess-backup-20261020-174620` |
 | Cron | NONE yet - `routes/console.php` schedules nothing. Add one hPanel cron (`schedule:run`, every minute) only when schedules exist |
-| Seeded logins (change when real users onboard) | admin `FRAMA`/`9001` · executive `FRAMA`/`1234` · managers `RUBAGA`/`1234`, `KIBUYA`/`1234` |
+| Seeded logins (change when real users onboard; every user has a UNIQUE `access_code` - basis of identity at login) | admin `FRAMA`/`1234` · executive `EXEC`/`1234` · managers `RUBAGA`/`1234`, `KIBUYA`/`1234` |
 
 First-deploy verification (all passed): web root/deep/login 200, JS served as
 `application/x-javascript`, 0 missing assets, `/api/v1/health` 200 JSON,
@@ -248,9 +248,10 @@ Checks that must be true:
 - [ ] `frama-api` is still a symlink -> `<clone>/public`
 - [ ] CORS: `OPTIONS` from `https://frama.custospark.com` returns 204 with
       `access-control-allow-origin` (login is a cross-origin Bearer flow)
-- [ ] Login smoke: `POST /api/v1/auth/login` `{"access_code":"FRAMA","pin":"9001"}`
-      -> 200 + token (never print the token) - do this at least after auth/route
-      changes
+- [ ] Login smoke (all four, never print tokens): `POST /api/v1/auth/login`
+      `{"access_code":"FRAMA","pin":"1234"}` (admin), `EXEC`/`1234`,
+      `RUBAGA`/`1234`, `KIBUYA`/`1234` -> 200 + correct `user.role` - do this at
+      least after auth/route changes
 - [ ] Bounce: `https://custospark.com/frama/login` -> 301
       `https://frama.custospark.com/login`
 - [ ] No new errors in `storage/logs/laravel*.log`
