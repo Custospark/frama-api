@@ -30,7 +30,7 @@ class AuthService implements AuthServiceInterface
 
         $token = $user->createToken('frama-auth')->plainTextToken;
 
-        return ['user' => $user->loadMissing('branch'), 'token' => $token];
+        return ['user' => $user->loadMissing('branch.businessType'), 'token' => $token];
     }
 
     public function logout(User $user): void

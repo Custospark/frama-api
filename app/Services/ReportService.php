@@ -76,14 +76,14 @@ class ReportService implements ReportServiceInterface
         $isHostel = $user->branch?->businessType?->slug === 'hostel';
 
         if ($isHostel) {
-            // Hostels report one collected total + occupancy; categories stay blank.
+            // Hostels report one collected total; categories stay blank.
             $total = (float) ($data['total_rev'] ?? 0);
             $rooms = 0.0;
             $bar = 0.0;
             $food = 0.0;
             $sauna = 0.0;
             $other = 0.0;
-            $bedsOccupied = (int) ($data['beds_occupied'] ?? 0);
+            $bedsOccupied = null;
         } else {
             $rooms = (float) ($data['rooms_rev'] ?? 0);
             $bar = (float) ($data['bar_rev'] ?? 0);

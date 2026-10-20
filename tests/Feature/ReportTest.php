@@ -325,7 +325,7 @@ class ReportTest extends TestCase
         $this->assertEqualsWithDelta(16.7, $response->json('data.custom_values.cost_ratio'), 0.001);
     }
 
-    public function test_hostel_branch_submits_total_and_beds_without_category_breakdown(): void
+    public function test_hostel_branch_submits_total_without_category_breakdown(): void
     {
         $type = \App\Models\BusinessType::create(['name' => 'Hostel', 'slug' => 'hostel']);
         $branch = Branch::factory()->create(['business_type_id' => $type->id]);
@@ -333,7 +333,6 @@ class ReportTest extends TestCase
 
         $response = $this->actingAs($manager)->post('/api/v1/reports', [
             'report_date' => now()->toDateString(),
-            'beds_occupied' => 120,
             'total_rev' => 1750000,
             'expenses' => 300000,
             'cash_handed_over' => 1450000,
@@ -342,14 +341,12 @@ class ReportTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('data.beds_occupied', 120)
             ->assertJsonPath('data.total_rev', 1750000)
             ->assertJsonPath('data.rooms_rev', 0)
             ->assertJsonPath('data.sauna_rev', 0);
 
         $this->assertDatabaseHas('reports', [
             'branch_id' => $branch->id,
-            'beds_occupied' => 120,
             'total_rev' => 1750000,
         ]);
     }
