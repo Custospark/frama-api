@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\ReportsExport;
 use App\Http\Requests\ReportFilterRequest;
 use App\Http\Requests\StoreReportRequest;
 use App\Http\Resources\ReportResource;
@@ -10,7 +11,9 @@ use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use ZipStream\ZipStream;
 
@@ -141,47 +144,14 @@ class ReportController extends BaseApiController
         return $unique;
     }
 
-    public function export(ReportFilterRequest $request): StreamedResponse
+    public function export(ReportFilterRequest $request): BinaryFileResponse
     {
         $reports = $this->reportService->filters($request->user(), $request->validated());
 
-        $customColumns = $this->customColumnKeys($reports);
-
-        return response()->streamDownload(function () use ($reports, $customColumns) {
-            $out = fopen('php://output', 'w');
-            fputcsv($out, array_merge(
-                ['Date', 'Branch', 'Rooms', 'Bar', 'Food', 'Sauna', 'Other', 'Rooms Occupied', 'Expected This Semester', 'Collected So Far', 'Total', 'Expenses', 'Cash Handed Over', 'Comment', 'Manager', 'Status'],
-                array_map(fn ($col) => $col['label'], $customColumns),
-            ));
-
-            foreach ($reports as $report) {
-                $values = $report->custom_values ?? [];
-                $customCells = array_map(fn ($col) => $values[$col['key']] ?? '', $customColumns);
-
-                fputcsv($out, array_merge([
-                    $report->report_date?->toDateString(),
-                    $report->branch?->branch_name,
-                    $report->rooms_rev,
-                    $report->bar_rev,
-                    $report->food_rev,
-                    $report->sauna_rev,
-                    $report->other_rev,
-                    $report->rooms_occupied,
-                    $report->amount_expected_semester,
-                    $report->collected_so_far,
-                    $report->total_rev,
-                    $report->expenses,
-                    $report->cash_handed_over,
-                    $report->comment,
-                    $report->manager_name,
-                    $report->submitted_at ? 'Submitted' : 'Pending',
-                ], $customCells));
-            }
-
-            fclose($out);
-        }, 'frama-reports-' . now()->format('Ymd-His') . '.csv', [
-            'Content-Type' => 'text/csv',
-        ]);
+        return Excel::download(
+            new ReportsExport($reports, $this->customColumnKeys($reports)),
+            'frama-reports-' . now()->format('Ymd-His') . '.xlsx',
+        );
     }
 
     /**

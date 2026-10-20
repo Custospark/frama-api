@@ -241,7 +241,7 @@ class ReportTest extends TestCase
             ->assertJsonCount(3, 'data');
     }
 
-    public function test_executive_can_export_csv(): void
+    public function test_executive_can_export_excel(): void
     {
         $branch = Branch::factory()->create(['branch_name' => 'Rubaga']);
         Report::factory()->forBranch($branch)->create();
@@ -250,7 +250,11 @@ class ReportTest extends TestCase
         $response = $this->actingAs($executive)->get('/api/v1/reports/export');
 
         $response->assertOk();
-        $this->assertStringContainsString('text/csv', $response->headers->get('content-type'));
+        $this->assertStringContainsString(
+            'spreadsheetml.sheet',
+            (string) $response->headers->get('content-type'),
+        );
+        $this->assertStringContainsString('.xlsx', (string) $response->headers->get('content-disposition'));
     }
 
     public function test_manager_cannot_export(): void
