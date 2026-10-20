@@ -68,18 +68,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Daily Report Deadline
-    |--------------------------------------------------------------------------
-    |
-    | Managers may only submit a report for a given day before this local time
-    | (HH:MM). After the deadline the day is locked for that branch.
-    |
-    */
-
-    'report_deadline' => env('FRAMA_REPORT_DEADLINE', '21:00'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

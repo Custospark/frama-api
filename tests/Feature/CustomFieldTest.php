@@ -22,7 +22,6 @@ class CustomFieldTest extends TestCase
     {
         parent::setUp();
         Storage::fake('public');
-        config(['app.report_deadline' => '23:59']);
     }
 
     public function test_manager_can_create_custom_field(): void

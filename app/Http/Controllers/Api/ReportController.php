@@ -44,10 +44,6 @@ class ReportController extends BaseApiController
 
     public function store(StoreReportRequest $request): JsonResponse
     {
-        if ($this->reportService->isLockedForDate($request->validated('report_date'))) {
-            return ApiResponse::error('Reports for this date are locked (past the deadline).', 422);
-        }
-
         try {
             $report = $this->reportService->submit(
                 $request->user(),

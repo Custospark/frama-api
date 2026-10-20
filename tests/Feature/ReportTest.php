@@ -19,8 +19,6 @@ class ReportTest extends TestCase
     {
         parent::setUp();
         Storage::fake('public');
-        // Ensure submissions are never blocked by the deadline during tests.
-        config(['app.report_deadline' => '23:59']);
     }
 
     public function test_manager_can_submit_report_with_attachments(): void
@@ -133,15 +131,13 @@ class ReportTest extends TestCase
         ])->assertStatus(422);
     }
 
-    public function test_report_is_locked_after_deadline(): void
+    public function test_manager_can_submit_report_for_a_past_date(): void
     {
-        config(['app.report_deadline' => '00:00']);
-
         $branch = Branch::factory()->create();
         $manager = User::factory()->manager($branch)->create();
 
         $this->actingAs($manager)->post('/api/v1/reports', [
-            'report_date' => now()->toDateString(),
+            'report_date' => now()->subDays(3)->toDateString(),
             'rooms_rev' => 1000,
             'bar_rev' => 0,
             'food_rev' => 0,
@@ -151,7 +147,7 @@ class ReportTest extends TestCase
             'cash_handed_over' => 1000,
             'receipt_photos' => [UploadedFile::fake()->image('receipt.jpg')],
             'expense_receipts' => [UploadedFile::fake()->image('expense.jpg')],
-        ])->assertStatus(422);
+        ])->assertStatus(201);
     }
 
     public function test_manager_can_download_an_attachment(): void

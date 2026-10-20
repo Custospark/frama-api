@@ -203,25 +203,6 @@ class ReportService implements ReportServiceInterface
         }
     }
 
-    public function isLockedForDate(string $date): bool
-    {
-        $deadline = (string) config('app.report_deadline', '21:00');
-
-        $today = now()->toDateString();
-
-        if ($date < $today) {
-            return true;
-        }
-
-        if ($date > $today) {
-            return false;
-        }
-
-        return now()->greaterThanOrEqualTo(
-            Carbon::parse($today . ' ' . $deadline)
-        );
-    }
-
     protected function scopeFilters(User $user, array $filters): array
     {
         if (! $user->canViewAllBranches()) {
