@@ -26,6 +26,9 @@ class StoreReportRequest extends BaseFormRequest
         ];
 
         if ($this->isHostelBranch()) {
+            $rules['rooms_occupied'] = ['required', 'integer', 'min:0'];
+            $rules['amount_expected_semester'] = ['nullable', 'numeric', 'min:0'];
+            $rules['collected_so_far'] = ['nullable', 'numeric', 'min:0'];
             $rules['total_rev'] = ['required', 'numeric', 'min:0'];
         } else {
             $rules['rooms_rev'] = ['required', 'numeric', 'min:0'];
@@ -66,6 +69,9 @@ class StoreReportRequest extends BaseFormRequest
             'food_rev' => 'food revenue',
             'sauna_rev' => 'sauna revenue',
             'other_rev' => 'other revenue',
+            'rooms_occupied' => 'total rooms occupied',
+            'amount_expected_semester' => 'amount expected this semester',
+            'collected_so_far' => 'money collected so far',
             'total_rev' => 'total collected today',
             'expenses' => 'expenses',
             'cash_handed_over' => 'cash handed over',

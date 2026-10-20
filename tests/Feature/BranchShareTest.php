@@ -26,10 +26,10 @@ class BranchShareTest extends TestCase
         $this->getJson("/api/v1/share/branch/{$branch->slug}")->assertStatus(401);
     }
 
-    public function test_any_authenticated_role_can_view_a_shared_branch_summary(): void
+    public function test_manager_can_view_their_own_branch_summary(): void
     {
         $branch = Branch::factory()->create(['branch_name' => 'Rubaga']);
-        $manager = User::factory()->manager()->create();
+        $manager = User::factory()->manager($branch)->create();
 
         Report::factory()->forBranch($branch)->onDate(now()->toDateString())->create([
             'rooms_rev' => 100000,
@@ -47,6 +47,17 @@ class BranchShareTest extends TestCase
             ->assertJsonPath('data.today.total_rev', 180000)
             ->assertJsonPath('data.month_total', 180000)
             ->assertJsonPath('data.submitted_this_month', 1);
+    }
+
+    public function test_manager_cannot_view_another_branch_summary(): void
+    {
+        $own = Branch::factory()->create();
+        $other = Branch::factory()->create();
+        $manager = User::factory()->manager($own)->create();
+
+        $this->actingAs($manager)
+            ->getJson("/api/v1/share/branch/{$other->slug}")
+            ->assertStatus(403);
     }
 
     public function test_shared_summary_never_exposes_receipt_images_or_other_branches(): void
@@ -68,8 +79,8 @@ class BranchShareTest extends TestCase
 
     public function test_shared_summary_includes_a_trend_series(): void
     {
-        $viewer = User::factory()->manager()->create();
         $branch = Branch::factory()->create();
+        $viewer = User::factory()->manager($branch)->create();
 
         Report::factory()->forBranch($branch)->onDate(now()->toDateString())->create(['total_rev' => 5000]);
         Report::factory()->forBranch($branch)->onDate(now()->subDay()->toDateString())->create(['total_rev' => 3000]);

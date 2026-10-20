@@ -59,7 +59,7 @@ class DashboardService implements DashboardServiceInterface
                 'food_rev' => $report ? (float) $report->food_rev : 0.0,
                 'sauna_rev' => $report ? (float) $report->sauna_rev : 0.0,
                 'other_rev' => $report ? (float) $report->other_rev : 0.0,
-                'beds_occupied' => $report?->beds_occupied,
+                'rooms_occupied' => $report?->rooms_occupied,
                 'total_rev' => $report ? (float) $report->total_rev : 0.0,
                 'expenses' => $report ? (float) $report->expenses : 0.0,
                 'net_rev' => $report ? (float) ($report->total_rev - $report->expenses) : 0.0,

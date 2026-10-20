@@ -21,7 +21,16 @@ class ReportResource extends JsonResource
             'food_rev' => (float) $this->food_rev,
             'sauna_rev' => (float) $this->sauna_rev,
             'other_rev' => (float) $this->other_rev,
-            'beds_occupied' => $this->beds_occupied,
+            'rooms_occupied' => $this->rooms_occupied,
+            'amount_expected_semester' => $this->amount_expected_semester !== null
+                ? (float) $this->amount_expected_semester
+                : null,
+            'collected_so_far' => $this->collected_so_far !== null
+                ? (float) $this->collected_so_far
+                : null,
+            'balance_remaining' => $this->amount_expected_semester !== null
+                ? (float) $this->amount_expected_semester - (float) ($this->collected_so_far ?? 0)
+                : null,
             'total_rev' => (float) $this->total_rev,
             'expenses' => (float) $this->expenses,
             'cash_handed_over' => (float) $this->cash_handed_over,

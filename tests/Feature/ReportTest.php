@@ -333,6 +333,9 @@ class ReportTest extends TestCase
 
         $response = $this->actingAs($manager)->post('/api/v1/reports', [
             'report_date' => now()->toDateString(),
+            'rooms_occupied' => 45,
+            'amount_expected_semester' => 85000000,
+            'collected_so_far' => 60000000,
             'total_rev' => 1750000,
             'expenses' => 300000,
             'cash_handed_over' => 1450000,
@@ -341,14 +344,47 @@ class ReportTest extends TestCase
         ]);
 
         $response->assertStatus(201)
+            ->assertJsonPath('data.rooms_occupied', 45)
+            ->assertJsonPath('data.amount_expected_semester', 85000000)
+            ->assertJsonPath('data.collected_so_far', 60000000)
+            ->assertJsonPath('data.balance_remaining', 25000000)
             ->assertJsonPath('data.total_rev', 1750000)
             ->assertJsonPath('data.rooms_rev', 0)
             ->assertJsonPath('data.sauna_rev', 0);
 
         $this->assertDatabaseHas('reports', [
             'branch_id' => $branch->id,
+            'rooms_occupied' => 45,
             'total_rev' => 1750000,
         ]);
+    }
+
+    public function test_hostel_semester_figures_are_optional_and_carry_forward(): void
+    {
+        $type = \App\Models\BusinessType::create(['name' => 'Hostel', 'slug' => 'hostel']);
+        $branch = Branch::factory()->create(['business_type_id' => $type->id]);
+        $manager = User::factory()->manager($branch)->create();
+
+        Report::factory()->forBranch($branch)->onDate(now()->subDay()->toDateString())->create([
+            'rooms_occupied' => 40,
+            'amount_expected_semester' => 85000000,
+            'collected_so_far' => 60000000,
+            'total_rev' => 1000000,
+        ]);
+
+        $this->actingAs($manager)->post('/api/v1/reports', [
+            'report_date' => now()->toDateString(),
+            'rooms_occupied' => 42,
+            'total_rev' => 1750000,
+            'expenses' => 300000,
+            'cash_handed_over' => 1450000,
+            'receipt_photos' => [UploadedFile::fake()->image('receipt.jpg')],
+            'expense_receipts' => [UploadedFile::fake()->image('expense.jpg')],
+        ])
+            ->assertStatus(201)
+            ->assertJsonPath('data.amount_expected_semester', 85000000)
+            ->assertJsonPath('data.collected_so_far', 60000000)
+            ->assertJsonPath('data.balance_remaining', 25000000);
     }
 
     public function test_motel_branch_requires_category_revenues(): void

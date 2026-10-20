@@ -76,14 +76,41 @@ class ReportService implements ReportServiceInterface
         $isHostel = $user->branch?->businessType?->slug === 'hostel';
 
         if ($isHostel) {
-            // Hostels report one collected total; categories stay blank.
+            // Hostels report rooms occupied, the semester target and collections.
             $total = (float) ($data['total_rev'] ?? 0);
             $rooms = 0.0;
             $bar = 0.0;
             $food = 0.0;
             $sauna = 0.0;
             $other = 0.0;
-            $bedsOccupied = null;
+            $roomsOccupied = (int) ($data['rooms_occupied'] ?? 0);
+            $amountExpected = isset($data['amount_expected_semester'])
+                ? (float) $data['amount_expected_semester']
+                : null;
+            $collectedSoFar = isset($data['collected_so_far'])
+                ? (float) $data['collected_so_far']
+                : null;
+
+            // Semester figures change rarely; carry the last submitted values
+            // forward so managers only update them when they actually change.
+            if ($amountExpected === null || $collectedSoFar === null) {
+                $previous = Report::query()
+                    ->where('branch_id', $user->branch_id)
+                    ->whereDate('report_date', '<', $date)
+                    ->where(fn ($query) => $query
+                        ->whereNotNull('amount_expected_semester')
+                        ->orWhereNotNull('collected_so_far'))
+                    ->latest('report_date')
+                    ->latest('id')
+                    ->first();
+
+                $amountExpected ??= $previous?->amount_expected_semester !== null
+                    ? (float) $previous->amount_expected_semester
+                    : null;
+                $collectedSoFar ??= $previous?->collected_so_far !== null
+                    ? (float) $previous->collected_so_far
+                    : null;
+            }
         } else {
             $rooms = (float) ($data['rooms_rev'] ?? 0);
             $bar = (float) ($data['bar_rev'] ?? 0);
@@ -97,7 +124,9 @@ class ReportService implements ReportServiceInterface
                 'sauna_rev' => $sauna,
                 'other_rev' => $other,
             ]);
-            $bedsOccupied = null;
+            $roomsOccupied = null;
+            $amountExpected = null;
+            $collectedSoFar = null;
         }
 
         $customValues = $this->extractCustomValues($user->branch_id, [
@@ -125,7 +154,9 @@ class ReportService implements ReportServiceInterface
             'food_rev' => $food,
             'sauna_rev' => $sauna,
             'other_rev' => $other,
-            'beds_occupied' => $bedsOccupied,
+            'rooms_occupied' => $roomsOccupied,
+            'amount_expected_semester' => $amountExpected,
+            'collected_so_far' => $collectedSoFar,
             'total_rev' => $total,
             'expenses' => $data['expenses'] ?? 0,
             'cash_handed_over' => $data['cash_handed_over'] ?? 0,
