@@ -1,1 +1,0 @@
-var e={UGX:`UGX`,USD:`$`,EUR:`€`,GBP:`£`,KES:`KSh`};function t(){return`UGX`}function n(t){return e[t]||t}function r(e,r){let i=(r||t()).toUpperCase(),a=typeof e==`string`?parseFloat(e):e??NaN;if(isNaN(a))return`${n(i)} 0`;let o=Math.round(a).toString().replace(/\B(?=(\d{3})+(?!\d))/g,`,`);return`${n(i)} ${o}`}export{r as t};
