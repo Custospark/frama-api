@@ -28,7 +28,7 @@ class DatabaseSeeder extends Seeder
         // One hostel, three motels. Legacy codes are accepted so re-seeding an
         // existing database renames in place instead of duplicating branches.
         $branches = [
-            'makerere' => $this->upsertBranch('FRAMAHOSTEL', ['FRAMAHOSTEL'], 'Frama Hostel (Makerere)', 'Musimenta Teska', $businessTypes['hostel']->id),
+            'makerere' => $this->upsertBranch('FRAMAHOSTEL', ['FRAMAHOSTEL'], 'Frama Hostel (Makerere)', 'Musiimenta Teska', $businessTypes['hostel']->id),
             'kibuye' => $this->upsertBranch('KIBUYE', ['KIBUYE', 'KIBUYA'], 'Kibuye', 'Ivan', $businessTypes['motel']->id),
             'rubaga' => $this->upsertBranch('RUBAGA', ['RUBAGA'], 'Rubaga', 'Mucunguzi Alex', $businessTypes['motel']->id),
             'mbarara' => $this->upsertBranch('MBARARA', ['MBARARA'], 'Mbarara', 'Katsigazi Leen', $businessTypes['motel']->id),
@@ -52,8 +52,16 @@ class DatabaseSeeder extends Seeder
                 'pin' => '1234',
             ],
             [
+                'email' => 'jb@framainvestments.com',
+                'name' => 'JB MALI SSALONGO',
+                'role' => 'executive',
+                'branch_id' => null,
+                'access_code' => 'JB',
+                'pin' => '1234',
+            ],
+            [
                 'email' => 'makerere@framainvestments.com',
-                'name' => 'Musimenta Teska',
+                'name' => 'Musiimenta Teska',
                 'role' => 'manager',
                 'branch_id' => $branches['makerere']->id,
                 'access_code' => $branches['makerere']->code,

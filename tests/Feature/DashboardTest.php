@@ -72,8 +72,66 @@ class DashboardTest extends TestCase
             ->assertJsonPath('data.pending_count', 0);
     }
 
-    public function test_manager_cannot_access_dashboard(): void
+    public function test_summary_totals_stay_in_sync_with_the_displayed_rows(): void
     {
+        $motel = Branch::factory()->create(['branch_name' => 'Kibuye']);
+        $hostel = Branch::factory()->create(['branch_name' => 'Frama Hostel']);
+        Branch::factory()->create(['branch_name' => 'Rubaga']);
+        $executive = User::factory()->executive()->create();
+        $date = now()->toDateString();
+
+        Report::factory()->forBranch($motel)->onDate($date)->create([
+            'rooms_rev' => 120000,
+            'bar_rev' => 60000,
+            'food_rev' => 80000,
+            'sauna_rev' => 0,
+            'other_rev' => 10000,
+            'total_rev' => 270000,
+            'expenses' => 20000,
+            'cash_handed_over' => 250000,
+        ]);
+
+        Report::factory()->forBranch($hostel)->onDate($date)->create([
+            'rooms_rev' => 0,
+            'bar_rev' => 0,
+            'food_rev' => 0,
+            'sauna_rev' => 0,
+            'other_rev' => 0,
+            'rooms_occupied' => 18,
+            'total_rev' => 450000,
+            'expenses' => 35000,
+            'cash_handed_over' => 415000,
+        ]);
+
+        $response = $this->actingAs($executive)
+            ->getJson('/api/v1/dashboard/summary?date=' . $date)
+            ->assertOk();
+
+        $data = $response->json('data');
+        $rows = collect($data['rows']);
+
+        $this->assertSame(720000, $data['grand_total']);
+        $this->assertSame(55000, $data['expenses_total']);
+        $this->assertSame(665000, $data['net_total']);
+        $this->assertSame(665000, $data['cash_handed_total']);
+        $this->assertSame(2, $data['submitted_count']);
+        $this->assertSame(1, $data['pending_count']);
+
+        $this->assertSame($data['grand_total'], $rows->sum('total_rev'));
+        $this->assertSame($data['expenses_total'], $rows->sum('expenses'));
+        $this->assertSame($data['cash_handed_total'], $rows->sum('cash_handed_over'));
+        $this->assertSame(
+            $data['grand_total'] - $data['expenses_total'],
+            $rows->sum('net_rev'),
+        );
+
+        $hostelRow = $rows->firstWhere('branch_name', 'Frama Hostel');
+        $this->assertSame(450000, $hostelRow['total_rev']);
+        $this->assertSame(18, $hostelRow['rooms_occupied']);
+        $this->assertSame('Pending', $rows->firstWhere('branch_name', 'Rubaga')['status']);
+    }
+
+    public function test_manager_cannot_access_dashboard(): void    {
         $branch = Branch::factory()->create();
         $manager = User::factory()->manager($branch)->create();
 
