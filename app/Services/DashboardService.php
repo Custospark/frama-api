@@ -21,6 +21,15 @@ class DashboardService implements DashboardServiceInterface
             ->get()
             ->keyBy('branch_id');
 
+        $monthStart = Carbon::parse($date)->startOfMonth()->toDateString();
+        $monthEnd = Carbon::parse($date)->endOfMonth()->toDateString();
+        $monthTotals = Report::query()
+            ->whereDate('report_date', '>=', $monthStart)
+            ->whereDate('report_date', '<=', $monthEnd)
+            ->select('branch_id', DB::raw('SUM(total_rev) as total'))
+            ->groupBy('branch_id')
+            ->pluck('total', 'branch_id');
+
         $rows = [];
         $grandTotal = 0.0;
         $expensesTotal = 0.0;
@@ -61,6 +70,7 @@ class DashboardService implements DashboardServiceInterface
                 'other_rev' => $report ? (float) $report->other_rev : 0.0,
                 'rooms_occupied' => $report?->rooms_occupied,
                 'total_rev' => $report ? (float) $report->total_rev : 0.0,
+                'month_total' => (float) ($monthTotals[$branch->id] ?? 0),
                 'expenses' => $report ? (float) $report->expenses : 0.0,
                 'net_rev' => $report ? (float) ($report->total_rev - $report->expenses) : 0.0,
                 'cash_handed_over' => $report ? (float) $report->cash_handed_over : 0.0,
@@ -84,6 +94,7 @@ class DashboardService implements DashboardServiceInterface
                     : [],
                 'status' => $report ? 'Submitted' : 'Pending',
                 'submitted_at' => $report?->submitted_at?->toIso8601String(),
+                'allow_edit' => (bool) ($report?->allow_edit ?? false),
                 'custom_values' => $this->presentReportCustomValues($customValues),
             ];
         }
@@ -92,6 +103,7 @@ class DashboardService implements DashboardServiceInterface
             'date' => $date,
             'rows' => $rows,
             'grand_total' => round($grandTotal, 2),
+            'month_total' => round((float) $monthTotals->sum(), 2),
             'expenses_total' => round($expensesTotal, 2),
             'net_total' => round($grandTotal - $expensesTotal, 2),
             'cash_handed_total' => round($cashHandedTotal, 2),

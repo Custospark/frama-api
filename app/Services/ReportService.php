@@ -87,30 +87,16 @@ class ReportService implements ReportServiceInterface
             $amountExpected = isset($data['amount_expected_semester'])
                 ? (float) $data['amount_expected_semester']
                 : null;
-            $collectedSoFar = isset($data['collected_so_far'])
-                ? (float) $data['collected_so_far']
-                : null;
-
-            // Semester figures change rarely; carry the last submitted values
-            // forward so managers only update them when they actually change.
-            if ($amountExpected === null || $collectedSoFar === null) {
-                $previous = Report::query()
-                    ->where('branch_id', $user->branch_id)
-                    ->whereDate('report_date', '<', $date)
-                    ->where(fn ($query) => $query
-                        ->whereNotNull('amount_expected_semester')
-                        ->orWhereNotNull('collected_so_far'))
-                    ->latest('report_date')
-                    ->latest('id')
-                    ->first();
-
-                $amountExpected ??= $previous?->amount_expected_semester !== null
+            // Semester expectations change rarely; carry the last submitted
+            // value forward. Collections are cumulative and computed server-side.
+            if ($amountExpected === null) {
+                $previous = $this->previousHostelReport($user->branch_id, $date);
+                $amountExpected = $previous?->amount_expected_semester !== null
                     ? (float) $previous->amount_expected_semester
                     : null;
-                $collectedSoFar ??= $previous?->collected_so_far !== null
-                    ? (float) $previous->collected_so_far
-                    : null;
             }
+
+            $collectedSoFar = $this->nextCollectedSoFar($user->branch_id, $date, $total);
         } else {
             $rooms = (float) ($data['rooms_rev'] ?? 0);
             $bar = (float) ($data['bar_rev'] ?? 0);
@@ -170,9 +156,167 @@ class ReportService implements ReportServiceInterface
         $this->storeAttachments($report, $receiptFiles, 'receipt');
         $this->storeAttachments($report, $expenseFiles, 'expense');
 
+        if ($isHostel) {
+            $this->resequenceFollowingCollections($report);
+        }
+
         $this->whatsAppNotifier->notifyReportSubmitted($report->load('branch'));
 
         return $report;
+    }
+
+    public function update(User $user, int $id, array $data, array $receiptFiles, array $expenseFiles): Report
+    {
+        $report = $this->getById($user, $id);
+
+        if (! $report) {
+            throw new RuntimeException('Report not found.');
+        }
+
+        if (! $report->allow_edit) {
+            throw new RuntimeException('Editing has not been enabled for this report.');
+        }
+
+        if ($report->branch_id !== $user->branch_id) {
+            throw new RuntimeException('You can only edit reports for your own branch.');
+        }
+
+        $date = $report->report_date->toDateString();
+        $isHostel = $report->branch?->businessType?->slug === 'hostel';
+
+        if ($isHostel) {
+            $total = (float) ($data['total_rev'] ?? 0);
+            $rooms = 0.0;
+            $bar = 0.0;
+            $food = 0.0;
+            $sauna = 0.0;
+            $other = 0.0;
+            $roomsOccupied = (int) ($data['rooms_occupied'] ?? 0);
+            $amountExpected = array_key_exists('amount_expected_semester', $data)
+                ? (float) $data['amount_expected_semester']
+                : ($report->amount_expected_semester !== null ? (float) $report->amount_expected_semester : null);
+            $baseline = max(0, (float) $report->collected_so_far - (float) $report->total_rev);
+            $collectedSoFar = round($baseline + $total, 2);
+        } else {
+            $rooms = (float) ($data['rooms_rev'] ?? 0);
+            $bar = (float) ($data['bar_rev'] ?? 0);
+            $food = (float) ($data['food_rev'] ?? 0);
+            $sauna = (float) ($data['sauna_rev'] ?? 0);
+            $other = (float) ($data['other_rev'] ?? 0);
+            $total = Report::computeTotal([
+                'rooms_rev' => $rooms,
+                'bar_rev' => $bar,
+                'food_rev' => $food,
+                'sauna_rev' => $sauna,
+                'other_rev' => $other,
+            ]);
+            $roomsOccupied = null;
+            $amountExpected = null;
+            $collectedSoFar = null;
+        }
+
+        $extracted = $this->extractCustomValues($report->branch_id, [
+            ...$data,
+            'rooms_rev' => $rooms,
+            'bar_rev' => $bar,
+            'food_rev' => $food,
+            'sauna_rev' => $sauna,
+            'other_rev' => $other,
+            'total_rev' => $total,
+        ]);
+        $customValues = array_merge($report->custom_values ?? [], $extracted);
+
+        $businessTypeIds = collect($data['business_type_ids'] ?? $report->business_type_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $report = $this->reportRepository->update($report, [
+            'rooms_rev' => $rooms,
+            'bar_rev' => $bar,
+            'food_rev' => $food,
+            'sauna_rev' => $sauna,
+            'other_rev' => $other,
+            'rooms_occupied' => $roomsOccupied,
+            'amount_expected_semester' => $amountExpected,
+            'collected_so_far' => $collectedSoFar,
+            'total_rev' => $total,
+            'expenses' => $data['expenses'] ?? 0,
+            'cash_handed_over' => $data['cash_handed_over'] ?? 0,
+            'comment' => $data['comment'] ?? null,
+            'business_type_ids' => $businessTypeIds ?: null,
+            'custom_values' => $customValues ?: null,
+            'allow_edit' => false,
+        ]);
+
+        $this->storeAttachments($report, $receiptFiles, 'receipt');
+        $this->storeAttachments($report, $expenseFiles, 'expense');
+
+        if ($isHostel) {
+            $this->resequenceFollowingCollections($report);
+        }
+
+        return $report->fresh();
+    }
+
+    public function setEditPermission(User $user, int $id, bool $allow): ?Report
+    {
+        $report = $this->reportRepository->find($id);
+
+        if (! $report) {
+            return null;
+        }
+
+        return $this->reportRepository->update($report, ['allow_edit' => $allow]);
+    }
+
+    /**
+     * Keep later hostel reports consistent when an earlier collection total
+     * is corrected: each following report adds its own daily total.
+     */
+    protected function resequenceFollowingCollections(Report $report): void
+    {
+        $running = (float) $report->collected_so_far;
+        $following = Report::query()
+            ->where('branch_id', $report->branch_id)
+            ->whereDate('report_date', '>', $report->report_date->toDateString())
+            ->orderBy('report_date')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($following as $next) {
+            $running = round($running + (float) $next->total_rev, 2);
+
+            if ((float) $next->collected_so_far !== $running) {
+                $next->updateQuietly(['collected_so_far' => $running]);
+            }
+        }
+    }
+
+    /**
+     * Latest report before the given date, used to carry semester figures.
+     */
+    protected function previousHostelReport(int $branchId, string $date, ?int $excludeId = null): ?Report
+    {
+        return Report::query()
+            ->where('branch_id', $branchId)
+            ->whereDate('report_date', '<', $date)
+            ->when($excludeId, fn ($query) => $query->where('id', '!=', $excludeId))
+            ->latest('report_date')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Collections are cumulative: the previous cumulative total plus today's
+     * collection. Clients cannot override this figure.
+     */
+    protected function nextCollectedSoFar(int $branchId, string $date, float $todayTotal): float
+    {
+        $previous = $this->previousHostelReport($branchId, $date);
+
+        return round((float) ($previous?->collected_so_far ?? 0) + $todayTotal, 2);
     }
 
     /**

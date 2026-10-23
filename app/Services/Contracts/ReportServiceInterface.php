@@ -16,4 +16,8 @@ interface ReportServiceInterface
     public function getById(User $user, int $id): ?Report;
 
     public function submit(User $user, array $data, array $receiptFiles, array $expenseFiles): Report;
+
+    public function update(User $user, int $id, array $data, array $receiptFiles, array $expenseFiles): Report;
+
+    public function setEditPermission(User $user, int $id, bool $allow): ?Report;
 }

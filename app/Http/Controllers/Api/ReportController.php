@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exports\ReportsExport;
 use App\Http\Requests\ReportFilterRequest;
 use App\Http\Requests\StoreReportRequest;
+use App\Http\Requests\UpdateReportRequest;
 use App\Http\Resources\ReportResource;
 use App\Services\Contracts\ReportServiceInterface;
 use App\Support\ApiResponse;
@@ -56,6 +57,40 @@ class ReportController extends BaseApiController
         }
 
         return (new ReportResource($report->load(['branch', 'attachments'])))->response()->setStatusCode(201);
+    }
+
+    public function update(UpdateReportRequest $request, int $report): JsonResponse
+    {
+        try {
+            $updated = $this->reportService->update(
+                $request->user(),
+                $report,
+                $request->validated(),
+                $request->file('receipt_photos') ?? [],
+                $request->file('expense_receipts') ?? [],
+            );
+        } catch (RuntimeException $e) {
+            return ApiResponse::error($e->getMessage(), 409);
+        }
+
+        return (new ReportResource($updated->load(['branch', 'attachments'])))->response();
+    }
+
+    public function allowEdit(Request $request, int $report): JsonResponse
+    {
+        $validated = $request->validate(['allow_edit' => ['required', 'boolean']]);
+
+        $updated = $this->reportService->setEditPermission(
+            $request->user(),
+            $report,
+            (bool) $validated['allow_edit'],
+        );
+
+        if (! $updated) {
+            return ApiResponse::error('Report not found.', 404);
+        }
+
+        return (new ReportResource($updated->load(['branch', 'attachments'])))->response();
     }
 
     public function downloadAttachment(Request $request, int $report, int $attachment): StreamedResponse|JsonResponse

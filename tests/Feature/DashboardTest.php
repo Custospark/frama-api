@@ -111,6 +111,7 @@ class DashboardTest extends TestCase
         $rows = collect($data['rows']);
 
         $this->assertSame(720000, $data['grand_total']);
+        $this->assertSame(720000, $data['month_total']);
         $this->assertSame(55000, $data['expenses_total']);
         $this->assertSame(665000, $data['net_total']);
         $this->assertSame(665000, $data['cash_handed_total']);
@@ -127,6 +128,8 @@ class DashboardTest extends TestCase
 
         $hostelRow = $rows->firstWhere('branch_name', 'Frama Hostel');
         $this->assertSame(450000, $hostelRow['total_rev']);
+        $this->assertSame(450000, $hostelRow['month_total']);
+        $this->assertFalse($hostelRow['allow_edit']);
         $this->assertSame(18, $hostelRow['rooms_occupied']);
         $this->assertSame('Pending', $rows->firstWhere('branch_name', 'Rubaga')['status']);
     }

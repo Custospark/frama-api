@@ -32,6 +32,7 @@ class Report extends Model
         'receipt_image_url',
         'manager_name',
         'submitted_at',
+        'allow_edit',
         'custom_values',
     ];
 
@@ -52,6 +53,7 @@ class Report extends Model
             'cash_handed_over' => 'decimal:2',
             'business_type_ids' => 'array',
             'submitted_at' => 'datetime',
+            'allow_edit' => 'boolean',
             'custom_values' => 'array',
         ];
     }

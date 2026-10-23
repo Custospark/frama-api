@@ -18,4 +18,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->whereNumber('attachment');
     Route::post('reports', [ReportController::class, 'store'])
         ->middleware('role.exact:manager');
+    Route::match(['post', 'put'], 'reports/{report}', [ReportController::class, 'update'])
+        ->middleware('role.exact:manager')
+        ->whereNumber('report');
+    Route::post('reports/{report}/allow-edit', [ReportController::class, 'allowEdit'])
+        ->middleware('role:executive')
+        ->whereNumber('report');
 });

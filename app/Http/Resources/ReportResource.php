@@ -45,6 +45,7 @@ class ReportResource extends JsonResource
             'manager_name' => $this->manager_name,
             'status' => $this->submitted_at ? 'Submitted' : 'Pending',
             'submitted_at' => $this->submitted_at?->toIso8601String(),
+            'allow_edit' => (bool) $this->allow_edit,
             'custom_values' => $this->presentCustomValues(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

@@ -346,8 +346,8 @@ class ReportTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonPath('data.rooms_occupied', 45)
             ->assertJsonPath('data.amount_expected_semester', 85000000)
-            ->assertJsonPath('data.collected_so_far', 60000000)
-            ->assertJsonPath('data.balance_remaining', 25000000)
+            ->assertJsonPath('data.collected_so_far', 1750000)
+            ->assertJsonPath('data.balance_remaining', 83250000)
             ->assertJsonPath('data.total_rev', 1750000)
             ->assertJsonPath('data.rooms_rev', 0)
             ->assertJsonPath('data.sauna_rev', 0);
@@ -383,8 +383,148 @@ class ReportTest extends TestCase
         ])
             ->assertStatus(201)
             ->assertJsonPath('data.amount_expected_semester', 85000000)
-            ->assertJsonPath('data.collected_so_far', 60000000)
-            ->assertJsonPath('data.balance_remaining', 25000000);
+            ->assertJsonPath('data.collected_so_far', 61750000)
+            ->assertJsonPath('data.balance_remaining', 23250000);
+    }
+
+    public function test_executive_can_allow_edit_and_manager_can_correct_report(): void
+    {
+        $type = \App\Models\BusinessType::create(['name' => 'Motel', 'slug' => 'motel']);
+        $branch = Branch::factory()->create(['business_type_id' => $type->id]);
+        $manager = User::factory()->manager($branch)->create();
+        $executive = User::factory()->executive()->create();
+        $report = Report::factory()->forBranch($branch)->by($manager)->onDate(now()->toDateString())->create([
+            'rooms_rev' => 100000,
+            'bar_rev' => 0,
+            'food_rev' => 50000,
+            'sauna_rev' => 0,
+            'other_rev' => 0,
+            'total_rev' => 150000,
+            'expenses' => 10000,
+            'cash_handed_over' => 140000,
+        ]);
+
+        $this->actingAs($executive)
+            ->postJson("/api/v1/reports/{$report->id}/allow-edit", ['allow_edit' => true])
+            ->assertOk()
+            ->assertJsonPath('data.allow_edit', true);
+
+        $this->actingAs($manager)
+            ->putJson("/api/v1/reports/{$report->id}", [
+                'rooms_rev' => 120000,
+                'bar_rev' => 10000,
+                'food_rev' => 50000,
+                'sauna_rev' => 0,
+                'other_rev' => 0,
+                'expenses' => 12000,
+                'cash_handed_over' => 168000,
+                'comment' => 'Corrected the rooms figure.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.total_rev', 180000)
+            ->assertJsonPath('data.allow_edit', false)
+            ->assertJsonPath('data.comment', 'Corrected the rooms figure.');
+
+        $this->assertDatabaseHas('reports', [
+            'id' => $report->id,
+            'rooms_rev' => 120000,
+            'total_rev' => 180000,
+            'expenses' => 12000,
+            'allow_edit' => false,
+        ]);
+    }
+
+    public function test_correcting_earlier_hostel_report_updates_later_cumulative_totals(): void
+    {
+        $type = \App\Models\BusinessType::create(['name' => 'Hostel', 'slug' => 'hostel']);
+        $branch = Branch::factory()->create(['business_type_id' => $type->id]);
+        $manager = User::factory()->manager($branch)->create();
+        $executive = User::factory()->executive()->create();
+        $earlierDate = now()->subDays(2)->toDateString();
+        $todayDate = now()->toDateString();
+
+        $earlier = Report::factory()->forBranch($branch)->onDate($earlierDate)->create([
+            'rooms_occupied' => 10,
+            'amount_expected_semester' => 5000000,
+            'total_rev' => 1000000,
+            'collected_so_far' => 1000000,
+        ]);
+        $today = Report::factory()->forBranch($branch)->onDate($todayDate)->create([
+            'rooms_occupied' => 12,
+            'amount_expected_semester' => 5000000,
+            'total_rev' => 2000000,
+            'collected_so_far' => 3000000,
+        ]);
+
+        $this->actingAs($executive)
+            ->postJson("/api/v1/reports/{$earlier->id}/allow-edit", ['allow_edit' => true])
+            ->assertOk();
+
+        $this->actingAs($manager)
+            ->postJson("/api/v1/reports/{$earlier->id}", [
+                'rooms_occupied' => 11,
+                'amount_expected_semester' => 5000000,
+                'total_rev' => 1500000,
+                'expenses' => 0,
+                'cash_handed_over' => 1500000,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.collected_so_far', 1500000);
+
+        $this->assertDatabaseHas('reports', [
+            'id' => $today->id,
+            'collected_so_far' => 3500000,
+        ]);
+    }
+
+    public function test_manager_cannot_correct_report_without_edit_permission(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $report = Report::factory()->forBranch($branch)->onDate(now()->toDateString())->create();
+
+        $this->actingAs($manager)
+            ->putJson("/api/v1/reports/{$report->id}", [
+                'rooms_rev' => 1000,
+                'bar_rev' => 0,
+                'food_rev' => 0,
+                'sauna_rev' => 0,
+                'other_rev' => 0,
+                'expenses' => 0,
+                'cash_handed_over' => 1000,
+            ])
+            ->assertStatus(409);
+    }
+
+    public function test_manager_cannot_allow_edit(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $report = Report::factory()->forBranch($branch)->onDate(now()->toDateString())->create();
+
+        $this->actingAs($manager)
+            ->postJson("/api/v1/reports/{$report->id}/allow-edit", ['allow_edit' => true])
+            ->assertStatus(403);
+    }
+
+    public function test_manager_cannot_correct_another_branch_report(): void
+    {
+        $branch = Branch::factory()->create();
+        $other = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+        $report = Report::factory()->forBranch($other)->onDate(now()->toDateString())->create(['allow_edit' => true]);
+
+        $this->actingAs($manager)
+            ->putJson("/api/v1/reports/{$report->id}", [
+                'rooms_rev' => 1000,
+                'bar_rev' => 0,
+                'food_rev' => 0,
+                'sauna_rev' => 0,
+                'other_rev' => 0,
+                'expenses' => 0,
+                'cash_handed_over' => 1000,
+            ])
+            ->assertStatus(409);
     }
 
     public function test_motel_branch_requires_category_revenues(): void
