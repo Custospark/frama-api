@@ -227,6 +227,49 @@ class ReportTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
+    public function test_report_list_is_paginated_for_managers(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+
+        foreach (range(0, 14) as $daysAgo) {
+            Report::factory()
+                ->forBranch($branch)
+                ->onDate(now()->subDays($daysAgo)->toDateString())
+                ->create();
+        }
+
+        $this->actingAs($manager)
+            ->getJson('/api/v1/reports?per_page=10&page=1')
+            ->assertOk()
+            ->assertJsonCount(10, 'data')
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.per_page', 10)
+            ->assertJsonPath('meta.total', 15);
+
+        $this->actingAs($manager)
+            ->getJson('/api/v1/reports?per_page=10&page=2')
+            ->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.total', 15);
+    }
+
+    public function test_report_list_rejects_invalid_page_sizes(): void
+    {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->manager($branch)->create();
+
+        $this->actingAs($manager)
+            ->getJson('/api/v1/reports?per_page=0')
+            ->assertUnprocessable();
+
+        $this->actingAs($manager)
+            ->getJson('/api/v1/reports?per_page=101')
+            ->assertUnprocessable();
+    }
+
     public function test_executive_sees_all_reports(): void
     {
         Report::factory()->count(3)->create();
