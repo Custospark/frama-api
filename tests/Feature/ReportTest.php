@@ -189,6 +189,7 @@ class ReportTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString('application/zip', $response->headers->get('content-type'));
+        $this->assertStringStartsWith('PK', $response->streamedContent());
     }
 
     public function test_manager_cannot_download_another_branch_attachment(): void

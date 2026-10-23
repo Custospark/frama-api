@@ -132,8 +132,8 @@ class ReportController extends BaseApiController
 
         $disk = Storage::disk('public');
 
-        return response()->streamDownload(function () use ($attachments, $disk) {
-            $zip = new ZipStream\ZipStream($zipName);
+        return response()->streamDownload(function () use ($attachments, $disk, $zipName) {
+            $zip = new ZipStream(outputName: $zipName, sendHttpHeaders: false);
 
             $used = [];
             foreach ($attachments as $file) {
